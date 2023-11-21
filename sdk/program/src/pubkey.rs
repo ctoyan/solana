@@ -159,14 +159,16 @@ impl TryFrom<&str> for Pubkey {
 }
 
 #[allow(clippy::used_underscore_binding)]
-pub fn bytes_are_curve_point<T: AsRef<[u8]>>(_bytes: T) -> bool {
+pub fn bytes_are_curve_point<T: AsRef<[u8]>>(_bytes: T) -> Result<bool, PubkeyError> {
     #[cfg(not(target_os = "solana"))]
     {
         // NOTE: .unwrap() was added as a patch for the version from Stoyan
-        curve25519_dalek::edwards::CompressedEdwardsY::from_slice(_bytes.as_ref())
-            .unwrap()
-            .decompress()
-            .is_some()
+        Ok(
+            curve25519_dalek::edwards::CompressedEdwardsY::from_slice(_bytes.as_ref())
+                .map_err(|_| PubkeyError::InvalidSeeds)?
+                .decompress()
+                .is_some(),
+        )
     }
     #[cfg(target_os = "solana")]
     unimplemented!();
@@ -601,7 +603,7 @@ impl Pubkey {
             hasher.hashv(&[program_id.as_ref(), PDA_MARKER]);
             let hash = hasher.result();
 
-            if bytes_are_curve_point(hash) {
+            if bytes_are_curve_point(hash)? {
                 return Err(PubkeyError::InvalidSeeds);
             }
 
@@ -630,7 +632,7 @@ impl Pubkey {
         self.0
     }
 
-    pub fn is_on_curve(&self) -> bool {
+    pub fn is_on_curve(&self) -> Result<bool, PubkeyError> {
         bytes_are_curve_point(self)
     }
 
